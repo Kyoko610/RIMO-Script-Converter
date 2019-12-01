@@ -1,0 +1,11 @@
+	【1～100までの合計を求める】
+	set cnt = 0
+	set sum = 0
+@
+	calc cnt + 1
+	calc sum + cnt
+	if cnt = 100 then
+		msg sum
+		stop
+	endif
+	return

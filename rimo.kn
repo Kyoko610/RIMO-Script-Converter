@@ -1,0 +1,367 @@
+;:::::::::::::::::::::::::::::::::::
+;  スクリプト言語 RIMO(リモ)
+;リバーシが作りたい妹のための言語
+; (C)Chizuko 2019
+;:::::::::::::::::::::::::::::::::::
+var wMain: wnd@Wnd
+var dMain: wnd@Draw
+var tex: draw@Tex
+var fontProportional: draw@Font
+
+;石の色
+const GBALCK: int :: 1 {黒}
+const GWHITE: int :: 2 {白}
+
+var mode: bool :: false
+var ban: [][]int
+var myTurn: int
+var nowTurn: int
+
+var dx: []int
+var dy: []int
+
+const wx: int :: 512 {盤面サイズ}
+const wy: int :: 512 {盤面サイズ}
+const infH: int :: 120 {情報ウインドウ高さ}
+
+class OKERU()
+	+var x: int
+	+var y: int
+	+var my: float
+	+*func cmp(t: OKERU): int
+		ret(me.my > t.my) ?(1, -1)
+	end func
+end class
+
+func main()
+	do @wMain :: wnd@makeWnd(null, %fix, @wx, @wy + @infH, "RIMO～リバーシが作りたい妹のための言語～")
+	do @dMain :: wnd@makeDraw(@wMain, 0, 0, @wx, @wy + @infH, %fix, %fix, false)
+	do @tex :: draw@makeTex("res/ishi.png")
+	do @fontProportional :: draw@makeFont(null, 16, false, false, true, 0.0)
+	
+	do draw@autoClear(false)
+	do draw@sampler(%point)
+	
+	;方向走査用変数
+	do @dx :: [0, -1, -1, -1, 0, 1, 1, 1]
+	do @dy :: [1, 1, 0, -1, -1, -1, 0, 1]
+	
+	;盤面の初期化
+	do @ban :: #[10, 10]int
+	for n(0, 9)
+		do @ban[n][0] :: -999
+		do @ban[n][9] :: -999
+		do @ban[0][n] :: -999
+		do @ban[9][n] :: -999
+	end for
+	do @ban[4][4] :: @GWHITE
+	do @ban[5][4] :: @GBALCK
+	do @ban[4][5] :: @GBALCK
+	do @ban[5][5] :: @GWHITE
+	
+	do @readSrc()
+	
+	do @DISP("左クリックで先攻、\n右クリックで後攻だよ、お兄ちゃん☆")
+	do draw@render(60)
+	do @dMain.onMouseDownL :: @click
+	;先攻・後攻選択
+	block
+		while loop(wnd@act())
+			if(wnd@key(%mouseL) = true & @dMain.focused() = true)
+				do @myTurn :: @GBALCK
+				break loop
+			elif(wnd@key(%mouseR) = true)
+				do @myTurn :: @GWHITE
+				break loop
+			end if
+			do draw@render(60)
+		end while
+	end block
+	
+	do @nowTurn :: @GBALCK
+	
+	while mmm(wnd@act())
+		do @DISP("")
+		
+		if(@nowTurn = @myTurn)
+			block mainLoop
+				var banwk2: [][]int :: ##@ban
+				var en: bool :: false
+				for nx(1, 8)
+					for ny(1, 8)
+						if(@TURN(nx, ny, @myTurn) > 0)
+							do en :: true
+							do @ban :: ##banwk2
+							break nx
+						end if
+					end for
+				end for
+				if(en = false)
+					do @DISP("お兄ちゃんはパスみたいだね。")
+					do lib@sleep(1000)
+					break mainLoop
+				end if
+				do @DISP("")
+				do @mode :: true
+				while(@mode = true)
+					if(wnd@act() = false)
+						ret
+					end if
+					do draw@render(60)
+				end while
+				do @mode :: false
+			end block
+		else
+			block MainLoop
+				do @DISP("")
+				var banwk2: [][]int :: ##@ban
+				var en: bool :: false
+				for nx(1, 8)
+					for ny(1, 8)
+						if(@TURN(nx, ny, 3 - @myTurn) > 0)
+							do en :: true
+							do @ban :: ##banwk2
+							break nx
+						end if
+					end for
+				end for
+				if(en = false)
+					do @DISP("置けるところがないよう…パス(涙)")
+					do lib@sleep(1000)
+					break MainLoop
+				else
+					var r: @OKERU :: @RIMO()
+					if(r =& null)
+						ret
+					end if
+					if(@TURN(r.x, r.y, 3 - @myTurn) = 0)
+						for nx(1, 8)
+							for ny(1, 8)
+								if(@TURN(nx, ny, 3 - @myTurn) > 0)
+									do en :: true
+									break nx
+								end if
+							end for
+						end for
+					end if
+				end if
+			end block
+		end if
+		var banwk2: [][]int :: ##@ban
+		var en: bool :: false
+		for nx(1, 8)
+			for ny(1, 8)
+				if(@TURN(nx, ny, @myTurn) > 0)
+					do en :: true
+					do @ban :: ##banwk2
+					break nx
+				end if
+				if(@TURN(nx, ny, 3 - @myTurn) > 0)
+					do en :: true
+					do @ban :: ##banwk2
+					break nx
+				end if
+			end for
+		end for
+		if(en = false)
+			break mmm
+		end if
+		do @nowTurn :: 3 - @nowTurn
+	end while
+	var cnb: int :: 0
+	var cnw: int :: 0
+	for xx(1, 8)
+		for yy(1, 8)
+			do cnb :+ (@ban[xx][yy] = 1) ?(1, 0)
+			do cnw :+ (@ban[xx][yy] = 2) ?(1, 0)
+		end for
+	end for
+	do @DISP("終局。\n黒:\{cnb} 白\{cnw}")
+	
+	while(wnd@act())
+		do draw@render(60)
+	end while
+end func
+
+var label: dict<[]char, int>
+var hen: dict<[]char, lib@Int>
+var src: [][]char
+func readSrc()
+	var srcLst: list<[]char> :: #list<[]char>
+	do @label :: #dict<[]char, int>
+	do @hen :: #dict<[]char, lib@Int>
+	
+	var handle: file@Reader :: file@makeReader("rimo.txt")
+	do handle.delimiter("\n")
+	var cnt: int :: 0
+	
+	while Loop(handle.term() = false)
+		var str: []char :: handle.readStr()
+		if(str = "")
+			skip Loop
+		end if
+		
+		var t: [][]char :: (str.replace("　", " ")).split(" ")
+		if(t[0] = "label")
+			do @label.add(t[1], cnt)
+		end if
+		
+		do srcLst.add(str.replace("\t", ""))
+		do cnt :+ 1
+	end while
+	do handle.fin()
+	
+	do @src :: srcLst.toArray()
+end func
+
+func RIMO(): @OKERU
+	var pt: int :: 0
+	var cpt: int :: 0
+	
+	while ml(pt < ^@src)
+		if(draw@cnt() % 10 = 0)
+			if(wnd@act() = false)
+				ret null
+			end if
+		end if
+		var t: [][]char :: @src[pt].replace("　", " ").split(" ")
+		switch(t[0])
+		case "ちょっときゅうけい", "@"
+			do cpt :: pt
+		case "りたーん", "return"
+			do pt :: cpt
+		case "ねえねえ", "msg"
+			do draw@rect(0.0, 0.0, @wx $ float, @infH $ float, 0xFF223388)
+			do draw@rectLine(@wy $ float - 10.0 - 100.0, 10.0, 100.0, 100.0, 0xFFFFFFFF)
+			if(@hen.exist(t[1]) = true)
+				do @fontProportional.draw(32.0, (8 * 4) $ float, @hen.get(t[1], &).value.toStr(), draw@white)
+			else
+				do @fontProportional.draw(32.0, (8 * 4) $ float, t[1], draw@white)
+			end if
+			do draw@render(60)
+		case "おでかけだね", "goto"
+			do pt :: @label.get(t[1], &)
+		case "もしも", "if"
+			if((t[2] = "が" & t[4] = "だったら") | (t[2] = "=" & t[4] = "then"))
+				;do dbg@print(t[1])
+				var n1: int :: @hen.get(t[1], &).value
+				var n2: int
+				if(@hen.exist(t[3]) = true)
+					do n2 :: @hen.get(t[3], &).value
+				else
+					do n2 :: t[3].toInt(&)
+				end if
+				if(n1 = n2)
+				else
+					while(@src[pt] <> "もしものはなしだけどね" & @src[pt] <> "endif")
+						do pt :+ 1
+					end while
+				end if
+			end if
+		case "あのね", "set"
+			if(t[2] = "は" | t[2] = "=")
+				if(@hen.exist(t[1]) = false)
+					var v: lib@Int :: #lib@Int
+					do v.value :: 0
+					do @hen.add(t[1], v)
+				end if
+				do @hen.get(t[1], &).value :: t[3].toInt(&)
+			end if
+		case "よーし", "point"
+			if(t[2] = "と" | t[2] = "&")
+				var v: @OKERU :: #@OKERU
+				do v.x :: (@hen.exist(t[1]) = true) ?(@hen.get(t[1], &).value, t[1].toInt(&))
+				do v.y :: (@hen.exist(t[3]) = true) ?(@hen.get(t[3], &).value, t[3].toInt(&))
+				ret v
+			end if
+		case "わかった", "calc"
+			if(t[2] = "に" & t[4] = "をプラス" | t[2] = "+")
+				if(@hen.exist(t[3]) = true)
+					do @hen.get(t[1], &).value :+ @hen.get(t[3], &).value
+				else
+					do @hen.get(t[1], &).value :+ t[3].toInt(&)
+				end if
+			end if
+		case "すとっぷ", "stop"
+			while(wnd@act())
+				do draw@render(60)
+			end while
+			ret null
+		end switch
+		do pt :+ 1
+		;	do draw@render(60)
+	end while
+end func
+
+func TURN(x: int, y: int, color: int): int
+	if(@ban[x][y] <> 0)
+		ret 0
+	end if
+	var h: int :: 0
+	for d(0, 8 - 1)
+		var qx: int :: x + @dx[d]
+		var qy: int :: y + @dy[d]
+		var cnt: int :: 0
+		while(@ban[qx][qy] = 3 - color)
+			do qx :+ @dx[d]
+			do qy :+ @dy[d]
+			do cnt :+ 1
+		end while
+		if(@ban[qx][qy] = color & cnt > 0)
+			do qx :- @dx[d]
+			do qy :- @dy[d]
+			for ok(0, cnt - 1)
+				do @ban[qx][qy] :: color
+				do qx :- @dx[d]
+				do qy :- @dy[d]
+				do h :+ 1
+			end for
+		end if
+	end for
+	if(h > 0)
+		do @ban[x][y] :: color
+	end if
+	ret h
+end func
+func pause(): int
+	while loop(true)
+		if(wnd@act() = false)
+			ret - 1
+		end if
+		if(wnd@key(%mouseL) = false)
+			break loop
+		end if
+	end while
+	while loop(true)
+		if(wnd@act() = false)
+			ret - 1
+		end if
+		if(@dMain.focused() = true & wnd@key(%mouseL) = true)
+			break loop
+		end if
+		do draw@render(60)
+	end while
+	ret 0
+end func
+
+func click(wnd: wnd@Draw, x: int, y: int)
+	if(@mode = true)
+		if(@TURN(x / 64 + 1, (y - @infH) / 64 + 1, @myTurn) = 0)
+			do @DISP("そこには置けないよ、お兄ちゃん。")
+			ret
+		end if
+		do @mode :: false
+	end if
+end func
+func DISP(str: []char)
+	do draw@clear()
+	do draw@rect(0.0, 0.0, @wx $ float, @infH $ float, 0xFF223388)
+	do draw@rectLine(@wy $ float - 10.0 - 100.0, 10.0, 100.0, 100.0, 0xFFFFFFFF)
+	do @fontProportional.draw(32.0, (8 * 4) $ float, str, draw@white)
+	for y(1, 8)
+		for x(1, 8)
+			do @tex.draw(64.0 * (x - 1) $ float, 64.0 * (y - 1) $ float + @infH $ float, (64 * (@ban[x][y])) $ float, 0.0, 64.0, 64.0, draw@white)
+		end for
+	end for
+	do draw@render(60)
+end func
